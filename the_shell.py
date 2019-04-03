@@ -27,7 +27,8 @@ def run_shell(new_window):
         # Get the command from user input
         get_new_command(shell)
         # process_pipe_and_redirection(shell)
-        argument_list = split_command_into_args(shell)
+        argument_list = split_command_into_args(shell.command_input)
+        print_str(shell, str(argument_list))
         if shell.command_input == "exit":
             break
 
@@ -94,7 +95,7 @@ def get_new_command(shell):
     while char not in ["\n"]:
         # Check if the pressed key is a character key or
         # a special key and process accordingly
-        if check_key(char):
+        if check_char(char):
             process_character_key_press(shell, char)
         else:
             process_special_key_press(shell, char)
@@ -106,7 +107,7 @@ def get_new_command(shell):
     shell.command_history.append(shell.command_input)
 
 
-def check_key(char):
+def check_char(char):
     """
     Check if the character is a special key or not
 
@@ -237,15 +238,15 @@ def delete_character_in_line(shell, y, x):
                            shell.command_input[x - shell.prompt_length + 1:])
 
 
-def print_str(window, string, end="\n"):
+def print_str(shell, object, end="\n"):
     """
     Act like builtin function print but on curses window
 
     Input:
         - shell: The shell object whose curses window will be printed on
-        - string: The string that will be printed on the window
+        - object: Any object that can be converted into string
     """
-    shell.window.addstr(string + end)
+    shell.window.addstr(str(object) + end)
 
 
 def split_command_into_args(command_input):
@@ -261,7 +262,7 @@ def split_command_into_args(command_input):
         - argument_list: the list of arguments after processing globbing and
         path expandsion
     """
-    argument_list = shell.command_input.split()
+    argument_list = command_input.split()
     process_globbing(argument_list)
     process_path_expansions(argument_list)
     return argument_list
@@ -272,6 +273,10 @@ def process_globbing(argument_list):
 
 
 def process_path_expansions(argument_list):
+    pass
+
+
+def change_dir():
     pass
 
 
