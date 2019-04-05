@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from os import chdir, getcwd
 from os import environ as base_environ
+from argparse import ArgumentParser
 from os.path import basename, exists, isdir, isfile, abspath, join, expanduser
 from readline import read_history_file, write_history_file, set_history_length
 from readline import get_history_length
@@ -14,11 +15,16 @@ class Shell:
         try:
             self.environ_dict = (base_environ.copy() if not environ
                                  else environ.copy())
-
+            self.local_variable = {}
             self.history_file = expanduser(".intek-sh_history.txt")
+            try:
+                self.history = read_history_file()
+            except (PermissionError, FileNotFoundError):
+                self.history = []
             readline.set_history_length = 2000
             self.exit = False
             self.wait_for_execute_list = []
+            self.exit_code = 0
         except TypeError:
             print("Failed to initialize Shell.")
 
@@ -37,37 +43,30 @@ class Shell:
 
     def process_pipes_redirections(self, user_input):
         """
-        Simple interpreter for the user's input
-
-        Input:
-            - user_input: The user's input
-
-        Output:
-            - The arguments that are interpreted from the user's input
         """
         if not user_input:
             return None
-        # args_list = re_split(r"(?<!\\)>", user_input)
-        args_list = user_input
-        return args_list
+        argument_list = user_input
+        return argument_list
 
     def process_logical_operator(self, user_input):
         return user_input
 
     def argument_handling(self, user_input):
-        args = self.split_input_by_double_quotes(user_input)
-        args = self.replace_command_substitutions(args)
-        args = self.replace_path_expansion(args)
-        return args
-
-    def process_arguments(self, argument_list):
-        # Insert globbing
-
-        # Insert path expansion and parameter expansion
-
+        argument_list = self.split_input_by_double_quotes(user_input)
+        argument_list = self.replace_command_substitutions(argument_list)
+        argument_list = self.replace_path_expansion(argument_list)
         return argument_list
 
-    def execute_command(self, args, output=None):
+    def process_arguments(self, argument_list):
+        for argument in argument_list:
+            # Insert globbing
+
+            # Insert path expansion and parameter expansion
+            pass
+        return argument_list
+
+    def execute_command(self, argument_list, output=None):
         """
         Execute the command
 
@@ -81,29 +80,30 @@ class Shell:
         # If there is output from previous command, add it to the current
         # command's arguments
         if output:
-            args.append(output)
+            argument_list.append(output)
         # Dictionary contains command that will run the built-in functions
         built_in_functions = {"cd": self._change_dir,
                               "exit": self._exit_shell,
                               "printenv": self._print_environment,
                               "export": self._export,
                               "unset": self._unset}
-        return (built_in_functions.get(args[0], self.run_subprocess)(args))
+        return (built_in_functions.get(argument_list[0], self.run_subprocess)
+                (argument_list))
 
     #################################
     #       Builtin functions       #
     #################################
 
-    def _export(self, args):
+    def _export(self, argument_list):
         """
         Set _export attribute for shell variables.
 
         Input:
-            - args: The arguments that have been interpreted
+            - argument_list: The arguments that have been interpreted
         """
         # If there is no other argument, stdout will be the whole list of
         # set variables.
-        if len(args) == 1:
+        if len(argument_list) == 1:
             sorted_variable_name = list(self.environ_dict.keys())
             sorted_variable_name.sort()
             return "\n".join(["declare -x %s=\"%s\""
@@ -111,14 +111,14 @@ class Shell:
                                 str(self.environ_dict[environ_variable]))
                              for environ_variable in sorted_variable_name])
         # Otherwise, set the new environment variable
-        for arg in args[1:]:
+        for argument in argument_list[1:]:
             # If the identifier name violate the naming rule, return the error
             # message
-            if re_match(r"^(=|1|2|3|4|5|6|7|8|9|0)", arg):
+            if re_match(r"^(=|1|2|3|4|5|6|7|8|9|0)", argument):
                 return ("intek-sh: _export: '%s': not a valid identifier"
-                        % arg)
+                        % argument)
             # Split each arguments into a pair of name and value
-            components = re_split(r"(?<!\\)=|(?<!\\)\|", str(arg), 1)
+            components = re_split(r"(?<!\\)=|(?<!\\)\|", str(argument), 1)
             name = components[0]
             # If the pair doesn't have value, its default value will be ""
             try:
@@ -128,42 +128,42 @@ class Shell:
             self.environ_dict[name] = value
         return ""
 
-    def _print_environment(self, args):
+    def _print_environment(self, argument_list):
         """
         Print out an environment variable
 
         Input:
-            - args: The arguments that have been interpreted
+            - argument_list: The arguments that have been interpreted
 
         Output:
             - The string represents the values of all variables, connected by
             new line character
         """
-        if len(args) == 1:
+        if len(argument_list) == 1:
             return "\n".join(["%s=%s" % (key, value)
                              for key, value in self.environ_dict.items()])
-        return "\n".join(self.environ_dict[arg]
-                         for arg in args[1:]
-                         if arg in self.environ_dict)
+        return "\n".join(self.environ_dict[argument]
+                         for argument in argument_list[1:]
+                         if argument in self.environ_dict)
 
-    def _unset(self, args):
+    def _unset(self, argument_list):
         """
         Remove a variable from the current environment variable dictionary
 
         Input:
-            - args: The arguments that have been interpreted
+            - argument_list: The arguments that have been interpreted
         """
-        for arg in args[1:]:
-            if arg in self.environ_dict:
-                self.environ_dict.pop(arg)
+        for argument in argument_list[1:]:
+            if argument in self.environ_dict:
+                self.environ_dict.pop(argument)
         return ""
 
-    def _exit_shell(self, args):
+    def _exit_shell(self, argument_list):
         """
         Exit shell
 
         Input:
-            - args: Arguments interepred from user input
+            - argument_list: Arguments interepred from user input
 
         Output:
             - A print message indicate whether the function runs smoothly or
@@ -172,17 +172,17 @@ class Shell:
         self.exit = True
         return ("exit" +
                 ("\nintek-sh: exit: Too many arguments"
-                 if len(args) > 2 else
+                 if len(argument_list) > 2 else
                  "\nintek-sh: exit:"
-                 if len(args) == 2 and not args[1].isdigit()
+                 if len(argument_list) == 2 and not argument_list[1].isdigit()
                  else ""))
 
-    def _change_dir(self, args):
+    def _change_dir(self, argument_list):
         """
         Change the current working directory to another directory
 
         Input:
-            - args: Arguments interepred from user input
+            - argument_list: Arguments interepred from user input
 
         Output:
             - A print message indicate whether the function runs smoothly or
@@ -192,7 +192,8 @@ class Shell:
         # the 1st argument after "cd". If there is none of them, change it to
         # the directory that is recorded as HOME variable in the environ
         try:
-            new_dir = args[1] if len(args) > 1 else self.environ_dict["HOME"]
+            new_dir = (argument_list[1] if len(argument_list) > 1
+                       else self.environ_dict["HOME"])
             chdir(new_dir if not new_dir.startswith("~")
                   else expanduser(new_dir))
             self.environ_dict["PWD"] = getcwd()
@@ -207,32 +208,38 @@ class Shell:
         except KeyError as e:
             return "intek-sh: cd: HOME not set"
 
+    def _history(self, argument_list):
+        history_parser = ArgumentParser()
+        history_parser.add_argument("history")
+        history_parser.add_argument("-c")
     #################################
     #      Subprocess Handling      #
     #################################
 
-    def run_subprocess(self, args):
+    def run_subprocess(self, argument_list):
         """
         Exit shell (incomplete)
 
         Input:
-        - args: Arguments interepred from user input
+        - argument_list: Arguments interepred from user input
 
         Output:
         - A print message indicate whether the function runs smoothly or
         has any error.
         """
-        if not self.is_command_exist(args):
-            return ("intek-sh: %s: No such file or directory" % args[0]
-                    if args[0].startswith("./")
-                    else "intek-sh: %s: command not found" % args[0])
+        if not self.is_command_exist(argument_list):
+            return (("intek-sh: %s: No such file or directory"
+                     % argument_list[0])
+                    if argument_list[0].startswith("./")
+                    else "intek-sh: %s: command not found" % argument_list[0])
         try:
-            return subprocess.check_output(args, env=self.environ_dict,
+            return subprocess.check_output(argument_list,
+                                           env=self.environ_dict,
                                            universal_newlines=True)[:-1]
         except IsADirectoryError:
-            return self.get_error_message(args[0], IsADirectoryError)
+            return self.get_error_message(argument_list[0], IsADirectoryError)
         except PermissionError:
-            return self.get_error_message(args[0], PermissionError)
+            return self.get_error_message(argument_list[0], PermissionError)
         except subprocess.CalledProcessError:
             return ""
 
@@ -240,13 +247,13 @@ class Shell:
     #       Utility functions       #
     #################################
 
-    def is_command_exist(self, args):
+    def is_command_exist(self, argument_list):
         """
         Check if the command exist
 
         Input:
-            - args: Arguments interepred from user input, its first element is
-            the command
+            - argument_list: Arguments interepred from user input,
+            its first element is the command
 
         Output:
             - True if the command exists in PATH (or current directory if the
@@ -254,13 +261,14 @@ class Shell:
             - False otherwise
         """
         # If the command called is a script, check it in the current file
-        if (args[0].startswith(".") or args[0].startswith("..") or
-                args[0].startswith("~")):
-            return isfile(args[0])
+        if (argument_list[0].startswith(".") or
+                argument_list[0].startswith("..") or
+                argument_list[0].startswith("~")):
+            return isfile(argument_list[0])
         # Else, check it in each directory in the PATH environment
         else:
             try:
-                return any([isfile(join(bin_dir, args[0]))
+                return any([isfile(join(bin_dir, argument_list[0]))
                             for bin_dir in self.environ_dict["PATH"].split(":")
                             ])
             except KeyError:
@@ -269,6 +277,7 @@ class Shell:
     def get_error_message(self, argument, error, command_name=None):
         return ""
 
+    def write_history_file()
     #################################
     #         Run function         #
     #################################
@@ -281,21 +290,14 @@ class Shell:
             try:
                 # Read user input
                 user_input = self.read_user_input()
+                if not user_input:
+                    continue
+                # Split into waiting list
+                # Process arguments
                 argument_list = user_input.split()
                 argument_list = self.process_arguments(argument_list)
-                output = self.execute_command(args)
+                output = self.execute_command(argument_list)
                 print(output)
-                # command_list = self.process_logical_operator(user_input)
-                # Interpret that input
-                # command_list = self.process_pipes_redirections(user_input)
-                # if command_list:
-                #     output = None
-                #     # Run each command separately, the output of previous
-                #     # command will be the input of the next one
-                #     for command in command_list:
-                #         output = self.execute_command(command, output)
-                #     # Print out the final stdout
-                #     print(output + "\n" if output else "", end="")
             except EOFError:
                 return
 
