@@ -263,7 +263,7 @@ def run(shell):
             token_list = get_token_list(user_input)
             # command_list = process_command_operator(token_list)
             # if not command_list:
-                # continue
+            #    continue
             # Process arguments
             token_list = get_token_list(user_input)
             # output = shell.execute_command(argument_list)

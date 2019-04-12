@@ -9,7 +9,7 @@ class Token:
     def __init__(self, content):
         self._content = content
 
-    def parse(self, shell_variable_list=None):
+    def parse(self, environ_variable_dict={}, shell_variable_dict={}):
         pass
 
     def __str__(self):
@@ -20,7 +20,8 @@ class Token:
 
 
 class Word_Token(Token):
-    def parse(self, shell_variable_list=None):
+    def parse(self, environ_variable_dict,
+              shell_variable_dict):
         return self._content
 
     def __str__(self):
@@ -28,11 +29,12 @@ class Word_Token(Token):
 
 
 class Double_Quote_Token(Token):
-    def parse(self, shell_variable_list=None):
+    def parse(self, environ_variable_dict,
+              shell_variable_dict):
         return " ".join([item.parse() for item in self._content])
 
     def __str__(self):
-        return "Double_Quote(%s)" % ",".join([str(item)
+        return "Double_Quote(%s)" % ", ".join([str(item)
                                               for item in self._content])
 
     def get_original_string(self):
@@ -41,7 +43,7 @@ class Double_Quote_Token(Token):
 
 
 class Single_Quote_Token(Token):
-    def parse(self, shell_variable_list=None):
+    def parse(self, environ_variable_dict, shell_variable_dict=None):
         return " ".join([item.parse() for item in self._content])
 
     def __str__(self):
@@ -51,20 +53,12 @@ class Single_Quote_Token(Token):
         return "'%s'" % self._content
 
 
-class Subshell_Token(Token):
-    def parse(self, shell_variable_list=None):
-        pass
-
-    def __str__(self):
-        return "Subshell(%s)" % str(self._content)
-
-
 class Param_Expand_Token(Token):
-    def parse(self, shell_variable_list):
+    def parse(self, environ_variable_dict={}, shell_variable_dict={}):
         pass
 
     def __str__(self):
-        return "Param_Expand(%s)" % ",".join([str(item)
+        return "Param_Expand(%s)" % ", ".join([str(item)
                                               for item in self._content])
 
     def get_original_string(self):
@@ -82,7 +76,7 @@ class Param_Expand_Token(Token):
 
 
 class Operator_Token(Token):
-    def parse(self, shell_variable_list=None):
+    def parse(self, environ_variable_dict={}, shell_variable_dict={}):
         return self._content
 
     def __str__(self):
@@ -90,8 +84,8 @@ class Operator_Token(Token):
 
 
 class Variable_Token(Token):
-    def parse(self, shell_variable_list):
-        return shell_variable_list.get(self._content, "")
+    def parse(self, environ_variable_dict={}, shell_variable_dict={}):
+        return shell_variable_dict.get(self._content, "")
 
     def __str__(self):
         return "Variable(%s)" % str(self._content)
@@ -101,15 +95,27 @@ class Variable_Token(Token):
 
 
 class Param_Value_Token(Token):
-    def parse(self, shell_variable_list):
+    def parse(self, environ_variable_dict={}, shell_variable_dict={}):
         pass
 
     def __str__(self):
-        return "Param_Value(%s)" % ",".join([str(item)
+        return "Param_Value(%s)" % ", ".join([str(item)
                                              for item in self._content])
 
     def get_original_string(self):
-        return " ".join([item.get_original_string for item in self._content])
+        return " ".join([item.get_original_string() for item in self._content])
+
+
+class Subshell_Token(Token):
+    def parse(self, environ_variable_dict={}, shell_variable_dict={}):
+        pass
+
+    def __str__(self):
+        return "Subshell(%s)" % ", ".join([str(item)
+                                           for item in self._content])
+
+    def get_original_string(self):
+        return " ".join([item.get_original_string() for item in self._content])
 
 
 class Command:
