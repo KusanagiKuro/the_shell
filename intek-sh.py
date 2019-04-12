@@ -1,16 +1,19 @@
 #!/usr/bin/env python3
 from os import chdir, getcwd
 from os import environ as base_environ
-from argparse import ArgumentParser
+from naive_lexer import get_token_list
+from exception import BadSubstitutionError
 from os.path import basename, exists, isdir, isfile, abspath, join, expanduser
 from readline import read_history_file, write_history_file, set_history_length
 from readline import get_history_length
-from re import split as re_split
-from re import match as re_match
-import subprocess
+from subprocess import run, check_output
 
 
 class Shell:
+    """
+    Shell class that contains certain attributes of the shell as well as their
+    builtin functions.
+    """
     def __init__(self, environ=None):
         try:
             self.environ_dict = (base_environ.copy() if not environ
@@ -21,74 +24,12 @@ class Shell:
                 self.history = read_history_file()
             except (PermissionError, FileNotFoundError):
                 self.history = []
-            readline.set_history_length = 2000
+            set_history_length = 2000
             self.exit = False
             self.wait_for_execute_list = []
             self.exit_code = 0
         except TypeError:
             print("Failed to initialize Shell.")
-
-    #################################
-    #         Input Handling        #
-    #################################
-
-    def read_user_input(self):
-        """
-        Allow the user to type in the input
-
-        Output:
-            - The user's input
-        """
-        return input("intek-sh$ ")
-
-    def process_pipes_redirections(self, user_input):
-        """
-        """
-        if not user_input:
-            return None
-        argument_list = user_input
-        return argument_list
-
-    def process_logical_operator(self, user_input):
-        return user_input
-
-    def argument_handling(self, user_input):
-        argument_list = self.split_input_by_double_quotes(user_input)
-        argument_list = self.replace_command_substitutions(argument_list)
-        argument_list = self.replace_path_expansion(argument_list)
-        return argument_list
-
-    def process_arguments(self, argument_list):
-        for argument in argument_list:
-            # Insert globbing
-
-            # Insert path expansion and parameter expansion
-            pass
-        return argument_list
-
-    def execute_command(self, argument_list, output=None):
-        """
-        Execute the command
-
-        Input:
-            - command: The command needs to be executed
-            - output: The previous command's stdout
-
-        Output:
-            - The stdout after the command has been run
-        """
-        # If there is output from previous command, add it to the current
-        # command's arguments
-        if output:
-            argument_list.append(output)
-        # Dictionary contains command that will run the built-in functions
-        built_in_functions = {"cd": self._change_dir,
-                              "exit": self._exit_shell,
-                              "printenv": self._print_environment,
-                              "export": self._export,
-                              "unset": self._unset}
-        return (built_in_functions.get(argument_list[0], self.run_subprocess)
-                (argument_list))
 
     #################################
     #       Builtin functions       #
@@ -209,103 +150,134 @@ class Shell:
             return "intek-sh: cd: HOME not set"
 
     def _history(self, argument_list):
-        history_parser = ArgumentParser()
-        history_parser.add_argument("history")
-        history_parser.add_argument("-c")
-    #################################
-    #      Subprocess Handling      #
-    #################################
+        optional_argument_list = [argument for argument in argument_list
+                                  if argument.startswith("-")]
 
-    def run_subprocess(self, argument_list):
-        """
-        Exit shell (incomplete)
+    def run_builtin_command(self, argument_list, command):
+        # Dictionary contains command that will run the built-in functions
+        built_in_functions = {"cd": shell._change_dir,
+                              "exit": self._exit_shell,
+                              "printenv": self._print_environment,
+                              "export": self._export,
+                              "unset": self._unset}
+        return built_in_functions[command](argument_list)
 
-        Input:
-        - argument_list: Arguments interepred from user input
+#################################
+#      Subprocess Handling      #
+#################################
 
-        Output:
-        - A print message indicate whether the function runs smoothly or
-        has any error.
-        """
-        if not self.is_command_exist(argument_list):
-            return (("intek-sh: %s: No such file or directory"
-                     % argument_list[0])
-                    if argument_list[0].startswith("./")
-                    else "intek-sh: %s: command not found" % argument_list[0])
-        try:
-            return subprocess.check_output(argument_list,
-                                           env=self.environ_dict,
-                                           universal_newlines=True)[:-1]
-        except IsADirectoryError:
-            return self.get_error_message(argument_list[0], IsADirectoryError)
-        except PermissionError:
-            return self.get_error_message(argument_list[0], PermissionError)
-        except subprocess.CalledProcessError:
-            return ""
 
-    #################################
-    #       Utility functions       #
-    #################################
+def run_subprocess(self, argument_list):
+    """
+    Input:
+    - argument_list: Arguments interepred from user input
 
-    def is_command_exist(self, argument_list):
-        """
-        Check if the command exist
-
-        Input:
-            - argument_list: Arguments interepred from user input,
-            its first element is the command
-
-        Output:
-            - True if the command exists in PATH (or current directory if the
-            command contains ./)
-            - False otherwise
-        """
-        # If the command called is a script, check it in the current file
-        if (argument_list[0].startswith(".") or
-                argument_list[0].startswith("..") or
-                argument_list[0].startswith("~")):
-            return isfile(argument_list[0])
-        # Else, check it in each directory in the PATH environment
-        else:
-            try:
-                return any([isfile(join(bin_dir, argument_list[0]))
-                            for bin_dir in self.environ_dict["PATH"].split(":")
-                            ])
-            except KeyError:
-                return False
-
-    def get_error_message(self, argument, error, command_name=None):
+    Output:
+    - A print message indicate whether the function runs smoothly or
+    has any error.
+    """
+    if not self.is_command_exist(argument_list):
+        return (("intek-sh: %s: No such file or directory"
+                 % argument_list[0])
+                if argument_list[0].startswith("./")
+                else "intek-sh: %s: command not found" % argument_list[0])
+    try:
+        return subprocess.check_output(argument_list,
+                                       env=self.environ_dict,
+                                       universal_newlines=True)[:-1]
+    except IsADirectoryError:
+        return self.get_error_message(argument_list[0], IsADirectoryError)
+    except PermissionError:
+        return self.get_error_message(argument_list[0], PermissionError)
+    except subprocess.CalledProcessError:
         return ""
 
-    def write_history_file()
-    #################################
-    #         Run function         #
-    #################################
+#################################
+#       Utility functions       #
+#################################
 
-    def run(self):
-        """
-        Run the shell until the exit command is called
-        """
-        while not self.exit:
-            try:
-                # Read user input
-                user_input = self.read_user_input()
-                if not user_input:
-                    continue
-                # Split into waiting list
-                # Process arguments
-                argument_list = user_input.split()
-                argument_list = self.process_arguments(argument_list)
-                output = self.execute_command(argument_list)
-                print(output)
-            except EOFError:
-                return
+
+def is_command_exist(self, argument_list):
+    """
+    Check if the command exist
+
+    Input:
+        - argument_list: Arguments interepred from user input,
+        its first element is the command
+
+    Output:
+        - True if the command exists in PATH (or current directory if the
+        command contains ./)
+        - False otherwise
+    """
+    # If the command called is a script, check it in the current file
+    if (argument_list[0].startswith(".") or
+            argument_list[0].startswith("..") or
+            argument_list[0].startswith("~")):
+        return isfile(argument_list[0])
+    # Else, check it in each directory in the PATH environment
+    else:
+        try:
+            return any([isfile(join(bin_dir, argument_list[0]))
+                        for bin_dir in self.environ_dict["PATH"].split(":")
+                        ])
+        except KeyError:
+            return False
+
+
+def get_error_message(self, argument, error, command_name=None):
+    return ""
+
+
+#################################
+#         Input Handling        #
+#################################
+
+
+def read_user_input():
+    """
+    Allow the user to type in the input
+
+    Output:
+        - The user's input
+    """
+    return input("intek-sh$ ")
+
+
+#################################
+#         Run function          #
+#################################
+
+
+def run(shell):
+    """
+    Run the shell until the exit command is called
+
+    Input:
+        - shell: a shell object that will be run
+    """
+    while not shell.exit:
+        try:
+            # Read user input
+            user_input = read_user_input()
+            token_list = get_token_list(user_input)
+            # command_list = process_command_operator(token_list)
+            # if not command_list:
+                # continue
+            # Process arguments
+            token_list = get_token_list(user_input)
+            # output = shell.execute_command(argument_list)
+            print([str(item) for item in token_list])
+        except EOFError:
+            return
+        except BadSubstitutionError as e:
+            print("intek-sh: %s: bad substitution" % e.argument)
 
 
 def main():
     try:
         shell = Shell()
-        shell.run()
+        run(shell)
     except TypeError:
         return
 
