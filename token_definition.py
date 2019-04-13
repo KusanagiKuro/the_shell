@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from exception import BadSubstitutionError
 
 
 class Token_Pattern:
@@ -31,15 +32,15 @@ class Word_Token(Token):
 class Double_Quote_Token(Token):
     def parse(self, environ_variable_dict,
               shell_variable_dict):
-        return " ".join([item.parse() for item in self._content])
+        return "".join([item.parse() for item in self._content])
 
     def __str__(self):
         return "Double_Quote(%s)" % ", ".join([str(item)
                                               for item in self._content])
 
     def get_original_string(self):
-        return "\"%s\"" % " ".join([item.get_original_string()
-                                    for item in self._content])
+        return "\"%s\"" % "".join([item.get_original_string()
+                                   for item in self._content])
 
 
 class Single_Quote_Token(Token):
@@ -96,14 +97,17 @@ class Variable_Token(Token):
 
 class Param_Value_Token(Token):
     def parse(self, environ_variable_dict={}, shell_variable_dict={}):
-        pass
+        if (self._content[0] is None or
+                not (isinstance(self._content[0], Variable_Token) or
+                     isinstance(self._content[0], Operator_Token))):
+            raise BadSubstitutionError(self.get_original_string())
 
     def __str__(self):
         return "Param_Value(%s)" % ", ".join([str(item)
                                              for item in self._content])
 
     def get_original_string(self):
-        return " ".join([item.get_original_string() for item in self._content])
+        return "".join([item.get_original_string() for item in self._content])
 
 
 class Subshell_Token(Token):
@@ -115,14 +119,28 @@ class Subshell_Token(Token):
                                            for item in self._content])
 
     def get_original_string(self):
-        return " ".join([item.get_original_string() for item in self._content])
+        return "".join([item.get_original_string() for item in self._content])
+
+
+class Seperator_Token(Token):
+    def __str__(self):
+        return "Seperator()"
+
+    def get_original_string(self):
+        return " "
 
 
 class Command:
     def __init__(self, argument_list, stdin=None, stdout=None):
-        self.argument_list = argument_list
+        self.command = argument_list[0]
+        self.argument = argument_list[1:]
         self.stdin = stdin
         self.stdout = stdout
 
     def execute(self, subshell=True):
+        pass
+
+
+class Command_List:
+    def __init__(self, *args):
         pass

@@ -21,7 +21,7 @@ class Shell:
             self.local_variable = {}
             self.history_file = expanduser(".intek-sh_history.txt")
             try:
-                self.history = read_history_file()
+                self.history = read_history_file(self.history_file)
             except (PermissionError, FileNotFoundError):
                 self.history = []
             set_history_length = 2000
@@ -37,7 +37,7 @@ class Shell:
 
     def _export(self, argument_list):
         """
-        Set _export attribute for shell variables.
+        Modify a variable in shell.
 
         Input:
             - argument_list: The arguments that have been interpreted
@@ -56,7 +56,7 @@ class Shell:
             # If the identifier name violate the naming rule, return the error
             # message
             if re_match(r"^(=|1|2|3|4|5|6|7|8|9|0)", argument):
-                return ("intek-sh: _export: '%s': not a valid identifier"
+                return ("intek-sh: export: '%s': not a valid identifier"
                         % argument)
             # Split each arguments into a pair of name and value
             components = re_split(r"(?<!\\)=|(?<!\\)\|", str(argument), 1)
@@ -265,7 +265,6 @@ def run(shell):
             # if not command_list:
             #    continue
             # Process arguments
-            token_list = get_token_list(user_input)
             # output = shell.execute_command(argument_list)
             print([str(item) for item in token_list])
         except EOFError:

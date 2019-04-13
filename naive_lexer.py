@@ -10,19 +10,19 @@ class Token_Pattern:
 #################################
 
 
-def get_escaped_character(input_string, index, token_string,
+def get_escaped_character(list_of_char, index, token_string,
                           substitute_time=1):
     try:
-        next_char = input_string[index + 1]
+        next_char = list_of_char[index + 1]
     except IndexError:
-        input_string += input(">")
+        list_of_char.extend([char for char in input(">")])
         try:
-            next_char = input_string[index + 1]
+            next_char = list_of_char[index + 1]
         except IndexError:
             next_char = ""
     token_string += next_char
     index += 1
-    return input_string, index, token_string
+    return list_of_char, index, token_string
 
 
 def insert_token_to_list(content,
@@ -39,8 +39,8 @@ def insert_token_to_list(content,
         to
 
     Output:
-        - True if the token is added into the token list
-        - False if no token is added into the token list
+        - The new token if it has been inserted into the list
+        - None if nothing get inserted
     """
     # Check if the input types are correct
     if ((isinstance(content, str) or isinstance(content, list)) and
@@ -67,10 +67,12 @@ def insert_token_to_list(content,
             new_token = Variable_Token(content)
         elif token_type == "Param_Value":
             new_token = Param_Value_Token(content)
+        elif token_type == "Seperator":
+            new_token = Seperator_Token(content)
         # If the token type matches none of the above, there
         # will be no token added into the list
         else:
-            return False
+            return None
         # If there is no position being specified, add the new
         # token to the end of the list
         if position is None:
@@ -78,21 +80,21 @@ def insert_token_to_list(content,
         # Else insert it to the list at the position
         else:
             token_list.insert(position, new_token)
-        return True
-    return False
+        return new_token
+    return None
 
 #################################
 #            Quoting            #
 #################################
 
 
-def get_double_quote_token(input_string, index, token_list,
+def get_double_quote_token(list_of_char, index, token_list,
                            substitute_time=1):
     """
     Get the token created by the quoted string marked by the double quote
 
     Input:
-        - input_string: The user's input
+        - list_of_char: The user's input
         - index: The index that marked the start of the quoted string
         - token_list: The list that the token will be added into
 
@@ -106,52 +108,55 @@ def get_double_quote_token(input_string, index, token_list,
     # Loop until an unquoted/unescaped double quote is found
     while True:
         # Loop until end of string is reached
-        while index < len(input_string):
+        while index < len(list_of_char):
             # Increase index by one
             index += 1
             # Break if index is equal to the string's length
-            if index == len(input_string):
-                index -= 1
+            if index == len(list_of_char):
                 break
             # Get current character at index position
-            current_char = input_string[index]
+            current_char = list_of_char[index]
             # If current character is a backslash, get escaped chracter
-            if current_char == "\\":
-                input_string, index, token_string = get_escaped_character(
-                    input_string, index, token_string, substitute_time
+            if current_char is "\\":
+                list_of_char, index, token_string = get_escaped_character(
+                    list_of_char, index, token_string, substitute_time
                 )
             # If current chracter is an unquoted/unescaped double quote,
             # add a double quote token to the token list, return the current
             # index
-            elif current_char == "\"":
-                insert_token_to_list(content_list, token_list,
+            elif current_char is "\"":
+                insert_token_to_list(token_string, content_list)
+                insert_token_to_list(content_list if content_list
+                                     else [None], token_list,
                                      token_type="Double_Quote")
                 return index
             # If current character is an unquoted/unescaped dollar sign,
             # get dollar sign expand (variable or parameter expansion)
-            elif current_char == "$":
+            elif current_char is "$":
                 index, token_string = process_dollar_sign(
-                    input_string, index, token_string, content_list
+                    list_of_char, index, token_string, content_list
                 )
             # If current character is a <space>, insert the token string to
             # content list and reset it.
-            elif current_char == " ":
+            elif current_char is " ":
                 insert_token_to_list(token_string, content_list)
+                insert_token_to_list(" ", content_list,
+                                     token_type="Separator")
                 token_string = ""
             # Else, just add current character to token string
             else:
                 token_string += current_char
         # Ask user for more input if the quoted string is not closed
-        input_string += "\n" + input(">")
+        list_of_char.extend([char for char in "\n" + input(">")])
     return index
 
 
-def get_single_quote_token(input_string, index, token_list):
+def get_single_quote_token(list_of_char, index, token_list):
     """
     Get the token created by the quoted string marked by the single quote
 
     Input:
-        - input_string: The user's input
+        - list_of_char: The user's input
         - index: The index that marked the start of the quoted string
         - token_list: The list that the token will be added into
 
@@ -163,14 +168,14 @@ def get_single_quote_token(input_string, index, token_list):
     # Loop until another single quote is found
     while True:
         # Loop until end of string is reached
-        while index < len(input_string):
+        while index < len(list_of_char):
             # Increase index by 1
             index += 1
             # Break if index is equal to the length of input string
-            if index == len(input_string):
+            if index == len(list_of_char):
                 break
             # Get current character
-            current_char = input_string[index]
+            current_char = list_of_char[index]
             # If current character is a single quote,
             # insert a single quote token to token list
             # with token string as its content
@@ -182,7 +187,7 @@ def get_single_quote_token(input_string, index, token_list):
             else:
                 token_string += current_char
         # Ask user for more input if the quoted string is not closed
-        input_string += "\n" + input(">")
+        list_of_char.extend([char for char in "\n" + input(">")])
     return index
 
 #################################
@@ -190,28 +195,28 @@ def get_single_quote_token(input_string, index, token_list):
 #################################
 
 
-def get_param_expansion(input_string, index, token_list):
+def get_param_expansion(list_of_char, index, token_list):
     token_string = ""
     content_list = []
     param_name = ""
     param_operator = ""
-    param_value = ""
+    param_value = []
     index += 2
     while True:
         if not param_operator and not param_value:
             index, param_name = get_param_name(
-                input_string, index, content_list, param_name
+                list_of_char, index, content_list, param_name
             )
         if not param_value:
             index, param_operator = get_param_operator(
-                input_string, index, content_list, param_operator
+                list_of_char, index, content_list, param_operator
             )
         index, param_value = get_param_value(
-            input_string, index, content_list, param_value
+            list_of_char, index, content_list, param_value
         )
         try:
-            current_char = input_string[index]
-            if current_char == "}":
+            current_char = list_of_char[index]
+            if current_char is "}":
                 insert_token_to_list(content_list if content_list
                                      else [None],
                                      token_list,
@@ -219,16 +224,16 @@ def get_param_expansion(input_string, index, token_list):
                 return index
         except IndexError:
             pass
-        input_string += "\n" + input(">")
+        list_of_char.extend([char for char in " " + input(">")])
     return index
 
 
-def get_param_name(input_string, index, token_list, current_value):
+def get_param_name(list_of_char, index, token_list, current_value):
     """
     Get the parameter name in the parameter expansion
 
     Input:
-        - input_string: The user's input
+        - list_of_char: The user's input
         - index: The index that marked the start of the parameter name
         - token_list: The list that the token will be added into
 
@@ -237,8 +242,8 @@ def get_param_name(input_string, index, token_list, current_value):
     """
     token_string = current_value
     content_list = []
-    while index < len(input_string):
-        current_char = input_string[index]
+    while index < len(list_of_char):
+        current_char = list_of_char[index]
         if current_char.isalnum() or current_char is "_":
             token_string += current_char
         elif current_char is "}":
@@ -253,13 +258,13 @@ def get_param_name(input_string, index, token_list, current_value):
     return index, token_string
 
 
-def get_param_operator(input_string, index, token_list, current_value):
+def get_param_operator(list_of_char, index, token_list, current_value):
     operators = ["##", "%%", "%", "#", ":", ":?", ":-",
                  ":=", ":+"]
     previous_char = ""
     token_string = current_value
-    while index < len(input_string):
-        current_char = input_string[index]
+    while index < len(list_of_char):
+        current_char = list_of_char[index]
         if token_string + current_char not in operators:
             insert_token_to_list(token_string, token_list,
                                  token_type="Operator")
@@ -272,48 +277,62 @@ def get_param_operator(input_string, index, token_list, current_value):
     return index, token_string
 
 
-def get_param_value(input_string, index, token_list, current_value):
-    previous_char = ""
-    token_string = current_value
-    content_list = []
-    while index < len(input_string):
-        current_char = input_string[index]
-        if current_char == " " and not token_string:
+def get_param_value(list_of_char, index, token_list, current_content_list):
+    token_string = ""
+    content_list = current_content_list
+    while index < len(list_of_char):
+        current_char = list_of_char[index]
+        if current_char is " " and not token_string:
             pass
-        elif current_char == "\\":
-            input_string, index, token_string = get_escaped_character(
-                input_string, index, token_string
+        elif current_char is "\\":
+            list_of_char, index, token_string = get_escaped_character(
+                list_of_char, index, token_string
             )
-        elif current_char == "}":
+        elif current_char is "}":
             insert_token_to_list(token_string, content_list,
                                  token_type="Word")
-            insert_token_to_list(content_list, token_list,
+            insert_token_to_list(content_list if content_list
+                                 else [None], token_list,
                                  token_type="Param_Value")
-            return index, token_string
-        elif current_char == ":":
+            return index, content_list
+        elif current_char is ":":
             insert_token_to_list(token_string, content_list,
                                  token_type="Word")
             insert_token_to_list(":", content_list,
                                  token_type="Operator")
             token_string = ""
-        elif current_char == " " or current_char == "\n":
+        elif current_char is " " or current_char is "\n":
             insert_token_to_list(token_string, content_list,
                                  token_type="Word")
+            insert_token_to_list(" ", content_list,
+                                 token_type="Separator")
             token_string = ""
+        elif current_char is "'" or current_char is "\"":
+            insert_token_to_list(token_string, content_list,
+                                 token_type="Word")
+            index = (get_single_quote_token(list_of_char, index,
+                                            content_list)
+                     if current_char is "'"
+                     else get_double_quote_token(list_of_char, index,
+                                                 content_list))
+        elif current_char is "$":
+            index, token_string = process_dollar_sign(
+                list_of_char, index, token_string, content_list
+            )
         else:
             token_string += current_char
         index += 1
     insert_token_to_list(token_string, content_list,
                          token_type="Word")
-    return index, token_string
+    return index, content_list
 
 
-def get_variable(input_string, index, token_list):
-    previous_char = input_string[index]
+def get_variable(list_of_char, index, token_list):
+    previous_char = list_of_char[index]
     token_string = ""
-    while index < len(input_string):
+    while index < len(list_of_char):
         try:
-            current_char = input_string[index + 1]
+            current_char = list_of_char[index + 1]
             if current_char.isalnum() or current_char is "_":
                 token_string += current_char
             elif token_string:
@@ -331,22 +350,22 @@ def get_variable(input_string, index, token_list):
     return index
 
 
-def get_dollar_sign_expand(input_string, index, token_list):
+def get_dollar_sign_expand(list_of_char, index, token_list):
     """
     Get the token marked by the dollar sign
     """
     try:
-        next_character = input_string[index + 1]
+        next_character = list_of_char[index + 1]
         # If the next character is a curly bracket, this means it's
         # a parameter expansion. Return the end index of that parameter
         # expansion
         if next_character == "{":
-            return get_param_expansion(input_string, index,
+            return get_param_expansion(list_of_char, index,
                                        token_list)
         # If next character is a letter or an underscored, it's a
         # variable. Return the end index of that variable token
         elif next_character.isalpha() or next_character is "_":
-            return get_variable(input_string, index, token_list)
+            return get_variable(list_of_char, index, token_list)
         # Else the dollar sign doesn't have special meaning
         else:
             return index
@@ -354,13 +373,14 @@ def get_dollar_sign_expand(input_string, index, token_list):
         return index
 
 
-def process_dollar_sign(input_string, index, token_string, token_list):
-    end_index = get_dollar_sign_expand(input_string, index,
+def process_dollar_sign(list_of_char, index, token_string, token_list):
+    end_index = get_dollar_sign_expand(list_of_char, index,
                                        token_list)
     # If the end index of dollar sign expand is the same as the
     # current index (meaning the dollar sign stand alone), append
     # it to the token string
     if end_index == index:
+        current_char = list_of_char[index]
         token_string += current_char
     # Else, insert the previous token string to the content list,
     # reset the token string and set index equal to the end index
@@ -390,8 +410,10 @@ def get_token_list(input_string, index=0, subshell=False,
     """
     # If the input is incorrect, return None
     if not isinstance(input_string, str):
-        print("input_string parameter must be a str type object")
+        print("list_of_char parameter must be a str type object")
         return None
+    # Convert the string into list so it becomes mutable
+    list_of_char = [char for char in input_string]
     # Initialize the token list and token string (which will be used
     # to convert into token)
     token_list = []
@@ -401,9 +423,9 @@ def get_token_list(input_string, index=0, subshell=False,
     # Initialize a variable to track the previous character
     previous_char = ""
     # Loop through the input string one by one.
-    while index < len(input_string):
+    while index < len(list_of_char):
         # Get current character at current index
-        current_char = input_string[index]
+        current_char = list_of_char[index]
         # If previous character and current character can be combined
         # to create an operator
         if previous_char + current_char in Token_Pattern.operators:
@@ -420,25 +442,25 @@ def get_token_list(input_string, index=0, subshell=False,
             # Convert and add current token string as an operator token
             # to token list
             insert_token_to_list(token_string, token_list,
-                                 "Operator")
-            # New token string starts with current character
-            token_string = current_char
+                                 token_type="Operator")
+            token_string = ""
+            continue
         # Else if current character is a <backslash>
-        elif current_char == "\\":
-            input_string, index, token_string = get_escaped_character(
-                input_string, index, token_string
+        elif current_char is "\\":
+            list_of_char, index, token_string = get_escaped_character(
+                list_of_char, index, token_string
             )
         # Else if current character is a $
-        elif current_char == "$":
+        elif current_char is "$":
             index, token_string = process_dollar_sign(
-                input_string, index, token_string, token_list
+                list_of_char, index, token_string, token_list
             )
         # Else if current character is a <double_quote>
         # or a <space>
         # or a <single_quote>
         # or left parentheses
-        elif (current_char == "\"" or current_char == "'" or
-              current_char == "(" or current_char == " "):
+        elif (current_char is "\"" or current_char is "'" or
+              current_char is "(" or current_char is " "):
             # Convert and add current token string to token list
             insert_token_to_list(token_string, token_list)
             # New token string will be empty
@@ -455,8 +477,11 @@ def get_token_list(input_string, index=0, subshell=False,
                 # Run the get token function base on the current character
                 # and return the index
                 index = get_token_functions[current_char](
-                    input_string, index, token_list
+                    list_of_char, index, token_list
                 )
+            else:
+                insert_token_to_list(" ", token_list,
+                                     token_type="Seperator")
         # Else add current character to token string
         else:
             token_string += current_char
