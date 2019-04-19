@@ -2,11 +2,13 @@
 from os import chdir, getcwd
 from os import environ as base_environ
 from naive_lexer import get_token_list
-from exception import BadSubstitutionError
+from command_splitting import get_command_list
+from exception import *
 from os.path import basename, exists, isdir, isfile, abspath, join, expanduser
 from readline import read_history_file, write_history_file, set_history_length
 from readline import get_history_length
 from subprocess import run, check_output
+from sys import argv
 
 
 class Shell:
@@ -18,8 +20,8 @@ class Shell:
         try:
             self.environ_dict = (base_environ.copy() if not environ
                                  else environ.copy())
-            self.local_variable = {}
-            self.history_file = expanduser(".intek-sh_history.txt")
+            self.local_variable = self.environ_dict.copy()
+            self.history_file = expanduser(".intek-shhistory.txt")
             try:
                 self.history = read_history_file(self.history_file)
             except (PermissionError, FileNotFoundError):
@@ -35,7 +37,7 @@ class Shell:
     #       Builtin functions       #
     #################################
 
-    def _export(self, argument_list):
+    def export(self, argument_list):
         """
         Modify a variable in shell.
 
@@ -69,7 +71,7 @@ class Shell:
             self.environ_dict[name] = value
         return ""
 
-    def _print_environment(self, argument_list):
+    def print_environment(self, argument_list):
         """
         Print out an environment variable
 
@@ -87,7 +89,7 @@ class Shell:
                          for argument in argument_list[1:]
                          if argument in self.environ_dict)
 
-    def _unset(self, argument_list):
+    def unset(self, argument_list):
         """
         Remove a variable from the current environment variable dictionary
 
@@ -99,7 +101,7 @@ class Shell:
                 self.environ_dict.pop(argument)
         return ""
 
-    def _exit_shell(self, argument_list):
+    def exit_shell(self, argument_list):
         """
         Exit shell
 
@@ -118,7 +120,7 @@ class Shell:
                  if len(argument_list) == 2 and not argument_list[1].isdigit()
                  else ""))
 
-    def _change_dir(self, argument_list):
+    def change_dir(self, argument_list):
         """
         Change the current working directory to another directory
 
@@ -149,17 +151,17 @@ class Shell:
         except KeyError as e:
             return "intek-sh: cd: HOME not set"
 
-    def _history(self, argument_list):
+    def history(self, argument_list):
         optional_argument_list = [argument for argument in argument_list
                                   if argument.startswith("-")]
 
     def run_builtin_command(self, argument_list, command):
         # Dictionary contains command that will run the built-in functions
-        built_in_functions = {"cd": shell._change_dir,
-                              "exit": self._exit_shell,
-                              "printenv": self._print_environment,
-                              "export": self._export,
-                              "unset": self._unset}
+        built_in_functions = {"cd": self.change_dir,
+                              "exit": self.exit_shell,
+                              "printenv": self.print_environment,
+                              "export": self.export,
+                              "unset": self.unset}
         return built_in_functions[command](argument_list)
 
 #################################
@@ -261,22 +263,31 @@ def run(shell):
             # Read user input
             user_input = read_user_input()
             token_list = get_token_list(user_input)
-            # command_list = process_command_operator(token_list)
+            print("\n".join([str(item) for item in token_list]))
+            # print("".join([item.original_string for item in token_list]))
+            # command_list = get_command_list(token_list)
             # if not command_list:
             #    continue
             # Process arguments
             # output = shell.execute_command(argument_list)
-            print([str(item) for item in token_list])
+            # print([str(item) for item in command_list])
         except EOFError:
             return
         except BadSubstitutionError as e:
             print("intek-sh: %s: bad substitution" % e.argument)
+        except UnexpectedTokenError as e:
+            print("intek-sh: Unexpected token after %s" % e.argument)
+        except CommandNotFoundError as e:
+            print("intek-sh: %s: command not found" % e.argument)
 
 
 def main():
     try:
         shell = Shell()
-        run(shell)
+        if "-sub" in argv:
+            run_subshell(shell, argv)
+        else:
+            run(shell)
     except TypeError:
         return
 

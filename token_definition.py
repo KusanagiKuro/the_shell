@@ -1,146 +1,116 @@
 #!/usr/bin/env python3
-from exception import BadSubstitutionError
-
-
 class Token_Pattern:
-    operators = ['\|\|', '\|', '>', '<', '<<', '>>', '&&']
+    operators = ['\|\|', '\|', '>', '<', '<<', '>>', '&&', ";"]
 
 
 class Token:
-    def __init__(self, content):
-        self._content = content
-
-    def parse(self, environ_variable_dict={}, shell_variable_dict={}):
-        pass
+    def __init__(self, content, original_string):
+        self.content = content
+        self.original_string = original_string
 
     def __str__(self):
         pass
-
-    def get_original_string(self):
-        return self._content
 
 
 class Word_Token(Token):
-    def parse(self, environ_variable_dict,
-              shell_variable_dict):
-        return self._content
-
     def __str__(self):
-        return "Word(%s)" % str(self._content)
+        return "Word(%s)" % str(self.content)
 
 
 class Double_Quote_Token(Token):
-    def parse(self, environ_variable_dict,
-              shell_variable_dict):
-        return "".join([item.parse() for item in self._content])
-
     def __str__(self):
         return "Double_Quote(%s)" % ", ".join([str(item)
-                                              for item in self._content])
-
-    def get_original_string(self):
-        return "\"%s\"" % "".join([item.get_original_string()
-                                   for item in self._content])
+                                              for item in self.content])
 
 
 class Single_Quote_Token(Token):
-    def parse(self, environ_variable_dict, shell_variable_dict=None):
-        return " ".join([item.parse() for item in self._content])
-
     def __str__(self):
-        return "Single_Quote(%s)" % str(self._content)
-
-    def get_original_string(self):
-        return "'%s'" % self._content
+        return "Single_Quote(%s)" % str(self.content)
 
 
 class Param_Expand_Token(Token):
-    def parse(self, environ_variable_dict={}, shell_variable_dict={}):
-        pass
-
     def __str__(self):
         return "Param_Expand(%s)" % ", ".join([str(item)
-                                              for item in self._content])
-
-    def get_original_string(self):
-        if self._content[0] is None:
-            return "$\{\}"
-        if len(self._content) == 1:
-            return "${%s}" % self._content[0].get_original_string()
-        elif len(self._content) == 2:
-            return "${%s%s}" % (self.content[0].get_original_string(),
-                                self.content[1].get_original_string())
-        else:
-            return "${%s%s%s}" % (self.content[0].get_original_string(),
-                                  self.content[1].get_original_string(),
-                                  self.content[2].get_original_string())
+                                              for item in self.content])
 
 
 class Operator_Token(Token):
-    def parse(self, environ_variable_dict={}, shell_variable_dict={}):
-        return self._content
-
     def __str__(self):
-        return "Operator(%s)" % str(self._content)
+        return "Operator(%s)" % str(self.content)
 
 
 class Variable_Token(Token):
-    def parse(self, environ_variable_dict={}, shell_variable_dict={}):
-        return shell_variable_dict.get(self._content, "")
-
     def __str__(self):
-        return "Variable(%s)" % str(self._content)
-
-    def get_original_string(self):
-        return "$%s" % self._content
+        return "Variable(%s)" % str(self.content)
 
 
 class Param_Value_Token(Token):
-    def parse(self, environ_variable_dict={}, shell_variable_dict={}):
-        if (self._content[0] is None or
-                not (isinstance(self._content[0], Variable_Token) or
-                     isinstance(self._content[0], Operator_Token))):
-            raise BadSubstitutionError(self.get_original_string())
-
     def __str__(self):
         return "Param_Value(%s)" % ", ".join([str(item)
-                                             for item in self._content])
-
-    def get_original_string(self):
-        return "".join([item.get_original_string() for item in self._content])
+                                             for item in self.content])
 
 
 class Subshell_Token(Token):
-    def parse(self, environ_variable_dict={}, shell_variable_dict={}):
-        pass
-
     def __str__(self):
-        return "Subshell(%s)" % ", ".join([str(item)
-                                           for item in self._content])
-
-    def get_original_string(self):
-        return "".join([item.get_original_string() for item in self._content])
+        return "Subshell(%s)" % self.content
 
 
-class Seperator_Token(Token):
+class Separator_Token(Token):
     def __str__(self):
-        return "Seperator()"
-
-    def get_original_string(self):
-        return " "
+        return ("Seperator( )" if self.content == " "
+                else "Separator(\\n)")
 
 
 class Command:
-    def __init__(self, argument_list, stdin=None, stdout=None):
-        self.command = argument_list[0]
-        self.argument = argument_list[1:]
+    def __init__(self, token_list, stdin=None, stdout=None):
+        self.token_list = token_list
         self.stdin = stdin
         self.stdout = stdout
 
-    def execute(self, subshell=True):
+    def is_empty(self):
+        return False if len(self.token_list) else True
+
+    def __str__(self):
+        return "Command(TOKEN = (%s), STDIN = (%s), STDOUT = (%s))" % (
+            ", ".join([str(item) for item in self.token_list]),
+            ", ".join([str(item) for item in self.stdin])
+            if self.stdin else "None",
+            ", ".join([str(item) for item in self.stdout])
+            if self.stdout else "None"
+        )
+
+
+class Binary_Command:
+    def __init__(self, left_command, right_command=None,
+                 stdin=None, stdout=None):
+        self.left_command = left_command
+        self.right_command = right_command
+        self.stdin = None
+        self.stdout = None
+
+    def __str__(self):
         pass
 
 
-class Command_List:
-    def __init__(self, *args):
-        pass
+class Or_Command(Binary_Command):
+    def __str__(self):
+        return "Or(%s, %s)" % (
+            str(self.left_command),
+            str(self.right_command)
+        )
+
+
+class And_Command(Binary_Command):
+    def __str__(self):
+        return "And(%s, %s)" % (
+            str(self.left_command),
+            str(self.right_command)
+        )
+
+
+class Pipe_Command(Binary_Command):
+    def __str__(self):
+        return "Pipe(%s, %s)" % (
+            str(self.left_command),
+            str(self.right_command)
+        )
