@@ -1,166 +1,11 @@
 #!/usr/bin/env python3
-from os import chdir, getcwd
-from os import environ as base_environ
-from argparse import ArgumentParser
-from naive_lexer import tokenize_input
-from os.path import basename, exists, isdir, isfile, abspath, join, expanduser
-from readline import read_history_file, write_history_file, set_history_length
-from readline import get_history_length
-from subprocess import run, check_output
+from naive_lexer import get_token_list
+from command_splitting import get_command_list
+from token_expansion import expand_token_for_command_list
+from shell import Shell
+from exception import *
+from sys import argv
 
-
-class Shell:
-    """
-    Shell class that contains certain attributes of the shell as well as their
-    builtin functions.
-    """
-    def __init__(self, environ=None):
-        try:
-            self.environ_dict = (base_environ.copy() if not environ
-                                 else environ.copy())
-            self.local_variable = {}
-            self.history_file = expanduser(".intek-sh_history.txt")
-            try:
-                self.history = read_history_file()
-            except (PermissionError, FileNotFoundError):
-                self.history = []
-            set_history_length = 2000
-            self.exit = False
-            self.wait_for_execute_list = []
-            self.exit_code = 0
-        except TypeError:
-            print("Failed to initialize Shell.")
-
-    #################################
-    #       Builtin functions       #
-    #################################
-
-    def _export(self, argument_list):
-        """
-        Set _export attribute for shell variables.
-
-        Input:
-            - argument_list: The arguments that have been interpreted
-        """
-        # If there is no other argument, stdout will be the whole list of
-        # set variables.
-        if len(argument_list) == 1:
-            sorted_variable_name = list(self.environ_dict.keys())
-            sorted_variable_name.sort()
-            return "\n".join(["declare -x %s=\"%s\""
-                             % (environ_variable,
-                                str(self.environ_dict[environ_variable]))
-                             for environ_variable in sorted_variable_name])
-        # Otherwise, set the new environment variable
-        for argument in argument_list[1:]:
-            # If the identifier name violate the naming rule, return the error
-            # message
-            if re_match(r"^(=|1|2|3|4|5|6|7|8|9|0)", argument):
-                return ("intek-sh: _export: '%s': not a valid identifier"
-                        % argument)
-            # Split each arguments into a pair of name and value
-            components = re_split(r"(?<!\\)=|(?<!\\)\|", str(argument), 1)
-            name = components[0]
-            # If the pair doesn't have value, its default value will be ""
-            try:
-                value = components[1]
-            except IndexError:
-                value = ""
-            self.environ_dict[name] = value
-        return ""
-
-    def _print_environment(self, argument_list):
-        """
-        Print out an environment variable
-
-        Input:
-            - argument_list: The arguments that have been interpreted
-
-        Output:
-            - The string represents the values of all variables, connected by
-            new line character
-        """
-        if len(argument_list) == 1:
-            return "\n".join(["%s=%s" % (key, value)
-                             for key, value in self.environ_dict.items()])
-        return "\n".join(self.environ_dict[argument]
-                         for argument in argument_list[1:]
-                         if argument in self.environ_dict)
-
-    def _unset(self, argument_list):
-        """
-        Remove a variable from the current environment variable dictionary
-
-        Input:
-            - argument_list: The arguments that have been interpreted
-        """
-        for argument in argument_list[1:]:
-            if argument in self.environ_dict:
-                self.environ_dict.pop(argument)
-        return ""
-
-    def _exit_shell(self, argument_list):
-        """
-        Exit shell
-
-        Input:
-            - argument_list: Arguments interepred from user input
-
-        Output:
-            - A print message indicate whether the function runs smoothly or
-            has any error.
-        """
-        self.exit = True
-        return ("exit" +
-                ("\nintek-sh: exit: Too many arguments"
-                 if len(argument_list) > 2 else
-                 "\nintek-sh: exit:"
-                 if len(argument_list) == 2 and not argument_list[1].isdigit()
-                 else ""))
-
-    def _change_dir(self, argument_list):
-        """
-        Change the current working directory to another directory
-
-        Input:
-            - argument_list: Arguments interepred from user input
-
-        Output:
-            - A print message indicate whether the function runs smoothly or
-            has any error.
-        """
-        # Change the current working directory to the directory whose path is
-        # the 1st argument after "cd". If there is none of them, change it to
-        # the directory that is recorded as HOME variable in the environ
-        try:
-            new_dir = (argument_list[1] if len(argument_list) > 1
-                       else self.environ_dict["HOME"])
-            chdir(new_dir if not new_dir.startswith("~")
-                  else expanduser(new_dir))
-            self.environ_dict["PWD"] = getcwd()
-            return ""
-        except PermissionError:
-            return self.get_error_message(new_dir, PermissionError, "cd")
-        except FileNotFoundError:
-            return self.get_error_message(new_dir, FileNotFoundError, "cd")
-        except NotADirectoryError:
-            return self.get_error_message(new_dir, NotADirectoryError, "cd")
-        # When the HOME environ variable is not set, this error will raise
-        except KeyError as e:
-            return "intek-sh: cd: HOME not set"
-
-    def _history(self, argument_list):
-        optional_argument_list = [argument for argument in argument_list
-                                  if argument.startswith("-")]
-
-    def run_builtin_command(self, argument_list, command):
-        # Dictionary contains command that will run the built-in functions
-        built_in_functions = {"cd": shell._change_dir,
-                              "exit": self._exit_shell,
-                              "printenv": self._print_environment,
-                              "export": self._export,
-                              "unset": self._unset}
-        return built_in_functions[command](argument_list)
 
 #################################
 #      Subprocess Handling      #
@@ -234,7 +79,7 @@ def get_error_message(self, argument, error, command_name=None):
 #################################
 
 
-def read_user_input(shell):
+def read_user_input():
     """
     Allow the user to type in the input
 
@@ -244,25 +89,8 @@ def read_user_input(shell):
     return input("intek-sh$ ")
 
 
-def process_pipes_redirections(shell, user_input):
-    """
-    """
-    if not user_input:
-        return None
-    argument_list = user_input
-    return argument_list
-
-
-def process_logical_operator(shell, user_input):
-    return user_input
-
-
-def argument_handling(shell, user_input):
-    return argument_list
-
-
 #################################
-#         Run function         #
+#         Run function          #
 #################################
 
 
@@ -277,22 +105,31 @@ def run(shell):
         try:
             # Read user input
             user_input = read_user_input()
-            token_list = tokenize_input(user_input)
-            if not token_list:
+            token_list = get_token_list(user_input)
+            print("\n".join([str(item) for item in token_list]))
+            # print("".join([item.original_string for item in token_list]))
+            command_list = get_command_list(token_list)
+            if not command_list:
                 continue
-            # Split into waiting list
-            # Process arguments
-            token_list = shell.tokenize_input(user_input)
-            output = shell.execute_command(argument_list)
-            print(output)
+            expand_token_for_command_list(command_list, shell)
+            print([item.argument_string for item in command_list])
         except EOFError:
             return
+        except BadSubstitutionError as e:
+            print("intek-sh: %s: bad substitution" % e.argument)
+        except UnexpectedTokenError as e:
+            print("intek-sh: Unexpected token after %s" % e.argument)
+        except CommandNotFoundError as e:
+            print("intek-sh: %s: command not found" % e.argument)
 
 
 def main():
     try:
         shell = Shell()
-        run(shell)
+        if "-sub" in argv:
+            run_subshell(shell, argv)
+        else:
+            run(shell)
     except TypeError:
         return
 

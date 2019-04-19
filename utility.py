@@ -8,5 +8,5 @@ def read_file(file_name):
     return contents
 
 
-def write_file(file_name, mode="w+"):
-    with open(file_name, mode) as write
+# def write_file(file_name, mode="w+"):
+#     with open(file_name, mode) as write
