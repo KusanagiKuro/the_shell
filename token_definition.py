@@ -66,6 +66,7 @@ class Command:
         self.token_list = token_list
         self.stdin = stdin
         self.stdout = stdout
+        self.argument_string = ""
 
     def is_empty(self):
         return False if len(self.token_list) else True

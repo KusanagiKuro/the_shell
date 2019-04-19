@@ -235,8 +235,7 @@ def split_command_by_pipe(command):
         - command: the command after being splitted
     """
     # Check input type
-    if not (isinstance(command, Command) or
-            isinstance(command, Binary_Command)):
+    if not isinstance(command, (Command, Binary_Command)):
         print("split_command_by_pipe",
               "requires a Command or Binary_Command object as its parameter")
         return
@@ -305,79 +304,6 @@ def split_single_command_by_pipe(command):
     pipe_command.right_command = Command(token_list)
     # Return the final pipe command
     return pipe_command
-
-
-##############################
-#           Subshell         #
-##############################
-
-
-def check_subshell_syntax_for_single_command(command):
-    """
-    Check if the subshell token has correct syntax in a single command
-
-    Input:
-        - command: a Command type object
-
-    Output:
-        - token: A token that causes syntax error for the subshell.
-        None if there is no syntax error for the subshell
-    """
-    if not isinstance(command, Command):
-        print("check_subshell_syntax_for_single_command",
-              "requires a Command object as its parameter")
-        return None
-    for token in command.token_list:
-        if not (isinstance(token, Subshell_Token) or
-                isinstance(token, Separator_Token)):
-            return token
-    return None
-
-
-def check_subshell_syntax_for_command(command):
-    """
-    Check if the subshell token is in the correct syntax in a command
-
-    Input:
-        - command: A Command or Binary_Command type object
-    """
-    # Validate input
-    if not (isinstance(command, Command) or
-            isinstance(command, Binary_Command)):
-        print("check_subshell_syntax_for_command",
-              "requires a Command or Binary_Command object as its parameter")
-        return
-    # If the command is a Binary_Command, check syntax for its left and right
-    # commands
-    if isinstance(command, Binary_Command):
-        print(command)
-        check_subshell_syntax_for_command(command.left_command)
-        check_subshell_syntax_for_command(command.right_command)
-    # Else check syntax for the single command only if there is a subshell
-    # token in its token list
-    else:
-        if any(isinstance(token, Subshell_Token)
-               for token in command.token_list):
-            token = check_subshell_syntax_for_single_command(command)
-            if token:
-                raise UnexpectedTokenError(token.original_string)
-
-
-def check_subshell_syntax(command_list):
-    """
-    Check if the subshell token is in the correct syntax in command list
-
-    Input:
-        - command_list: a list of Command or Binary_Command type objects
-    """
-    # Validate input
-    if not isinstance(command_list, list):
-        print("check_subshell_syntax requires a list object as its parameter")
-        return
-    # Check syntax for each command in command list
-    for command in command_list:
-        check_subshell_syntax_for_command(command)
-    return command_list
 
 
 ##############################
@@ -538,6 +464,77 @@ def process_redirection_for_command_list(command_list):
 
 
 ##############################
+#           Subshell         #
+##############################
+
+
+def check_subshell_syntax_for_single_command(command):
+    """
+    Check if the subshell token has correct syntax in a single command
+
+    Input:
+        - command: a Command type object
+
+    Output:
+        - token: A token that causes syntax error for the subshell.
+        None if there is no syntax error for the subshell
+    """
+    if not isinstance(command, Command):
+        print("check_subshell_syntax_for_single_command",
+              "requires a Command object as its parameter")
+        return None
+    for token in command.token_list:
+        if not isinstance(token, (Subshell_Token, Operator_Token)):
+            return token
+    return None
+
+
+def check_subshell_syntax_for_command(command):
+    """
+    Check if the subshell token is in the correct syntax in a command
+
+    Input:
+        - command: A Command or Binary_Command type object
+    """
+    # Validate input
+    if not isinstance(command, (Command, Binary_Command)):
+        print("check_subshell_syntax_for_command",
+              "requires a Command or Binary_Command object as its parameter")
+        return
+    # If the command is a Binary_Command, check syntax for its left and right
+    # commands
+    if isinstance(command, Binary_Command):
+        print(command)
+        check_subshell_syntax_for_command(command.left_command)
+        check_subshell_syntax_for_command(command.right_command)
+    # Else check syntax for the single command only if there is a subshell
+    # token in its token list
+    else:
+        if any(isinstance(token, Subshell_Token)
+               for token in command.token_list):
+            token = check_subshell_syntax_for_single_command(command)
+            if token:
+                raise UnexpectedTokenError(token.original_string)
+
+
+def check_subshell_syntax(command_list):
+    """
+    Check if the subshell token is in the correct syntax in command list
+
+    Input:
+        - command_list: a list of Command or Binary_Command type objects
+    """
+    # Validate input
+    if not isinstance(command_list, list):
+        print("check_subshell_syntax requires a list object as its parameter")
+        return
+    # Check syntax for each command in command list
+    for command in command_list:
+        check_subshell_syntax_for_command(command)
+    return command_list
+
+
+##############################
 #          MAIN FLOW         #
 ##############################
 
@@ -563,7 +560,5 @@ def get_command_list(token_list):
     split_command_list_by_pipe(command_list)
     # print("2\n" + "\n".join([str(item) for item in command_list]))
     process_redirection_for_command_list(command_list)
-    # print("3\n" + "\n".join([str(item) for item in command_list]))
     check_subshell_syntax(command_list)
-    print("4\n" + "\n".join([str(item) for item in command_list]))
     return command_list

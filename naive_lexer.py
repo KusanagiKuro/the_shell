@@ -25,7 +25,7 @@ def insert_token_to_list(content,
         - None if nothing get inserted
     """
     # Check if the input types are correct
-    if ((isinstance(content, str) or isinstance(content, list)) and
+    if (isinstance(content, (str, list)) and
             isinstance(token_list, list) and
             (isinstance(position, int) or
              position is None) and
@@ -85,7 +85,7 @@ def get_escaped_character(list_of_char, index, token_string):
             next_char = list_of_char[index + 1]
         except IndexError:
             next_char = ""
-    token_string += next_char
+    token_string += "\\" + next_char
     index += 1
     return list_of_char, index, token_string
 
@@ -275,7 +275,7 @@ def get_param_expansion(list_of_char, index, token_list):
                 return index
         except IndexError:
             pass
-        list_of_char.extend([char for char in " " + input(">")])
+        list_of_char.extend([char for char in (" " + input(">"))])
     return index
 
 
@@ -358,7 +358,7 @@ def get_param_value(list_of_char, index, token_list, current_content_list):
     content_list = current_content_list
     while index < len(list_of_char):
         current_char = list_of_char[index]
-        if current_char is " " and not token_string:
+        if current_char is " " and not content_list:
             pass
         elif current_char is "\\":
             list_of_char, index, token_string = get_escaped_character(
