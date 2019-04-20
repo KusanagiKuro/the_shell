@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
-from token_definition import *
-from exception import *
+from token_definition import Operator_Token, Word_Token, Param_Expand_Token,\
+                             Double_Quote_Token, Single_Quote_Token, Subshell_Token,\
+                             Command, Or_Command, And_Command, Pipe_Command,\
+                             Binary_Command, Token, Separator_Token
+from exception import UnexpectedTokenError
 from naive_lexer import get_token_list
 
 
@@ -556,9 +559,10 @@ def get_command_list(token_list):
         return []
     # Start by splitting command by logical operators and semicolon
     command_list = split_by_logical_operators_and_semicolon(token_list)
-    # print("1\n" + "\n".join([str(item) for item in command_list]))
+    # Split the command list using the pipe operator as delimiter
     split_command_list_by_pipe(command_list)
-    # print("2\n" + "\n".join([str(item) for item in command_list]))
+    # Process redirection operators in command list
     process_redirection_for_command_list(command_list)
+    # Check syntax for subshell in the command list
     check_subshell_syntax(command_list)
     return command_list

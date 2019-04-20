@@ -2,40 +2,16 @@
 from naive_lexer import get_token_list
 from command_splitting import get_command_list
 from token_expansion import expand_token_for_command_list
+from readline import get_history_item, get_current_history_length,\
+                     add_history, set_history_length, read_history_file,\
+                     remove_history_item
+from os.path import isfile, join, expanduser
 from shell import Shell
-from exception import *
+from exception import BadSubstitutionError, UnexpectedTokenError,\
+                      CommandNotFoundError, EventNotFoundError
+from utility import get_error_message, get_history_log
 from sys import argv
 
-
-#################################
-#      Subprocess Handling      #
-#################################
-
-
-def run_subprocess(self, argument_list):
-    """
-    Input:
-    - argument_list: Arguments interepred from user input
-
-    Output:
-    - A print message indicate whether the function runs smoothly or
-    has any error.
-    """
-    if not self.is_command_exist(argument_list):
-        return (("intek-sh: %s: No such file or directory"
-                 % argument_list[0])
-                if argument_list[0].startswith("./")
-                else "intek-sh: %s: command not found" % argument_list[0])
-    try:
-        return subprocess.check_output(argument_list,
-                                       env=self.environ_dict,
-                                       universal_newlines=True)[:-1]
-    except IsADirectoryError:
-        return self.get_error_message(argument_list[0], IsADirectoryError)
-    except PermissionError:
-        return self.get_error_message(argument_list[0], PermissionError)
-    except subprocess.CalledProcessError:
-        return ""
 
 #################################
 #       Utility functions       #
@@ -70,10 +46,6 @@ def is_command_exist(self, argument_list):
             return False
 
 
-def get_error_message(self, argument, error, command_name=None):
-    return ""
-
-
 #################################
 #         Input Handling        #
 #################################
@@ -101,18 +73,36 @@ def run(shell):
     Input:
         - shell: a shell object that will be run
     """
+    set_history_length(2000)
+    try:
+        read_history_file(Shell.history_file)
+    except FileNotFoundError:
+        open(Shell.history_file, "w+").close()
+    except PermissionError:
+        pass
     while not shell.exit:
         try:
             # Read user input
             user_input = read_user_input()
-            token_list = get_token_list(user_input)
-            print("\n".join([str(item) for item in token_list]))
+            if user_input:
+                remove_history_item(get_current_history_length() - 1)
+            else:
+                continue
+            token_list, list_of_char = get_token_list(user_input)
+            # Add final input string after get_history_item
+            input_string = "".join(list_of_char)
+            if (get_history_item(get_current_history_length()) != input_string
+                    and input_string):
+                add_history(input_string)
+            print(" ".join([str(item) for item in token_list]))
+            # print("\n".join([str(item) for item in token_list]))
             # print("".join([item.original_string for item in token_list]))
             command_list = get_command_list(token_list)
             if not command_list:
                 continue
             expand_token_for_command_list(command_list, shell)
-            print([item.argument_string for item in command_list])
+            # print(command_list)
+            # print([item.argument_list for item in command_list])
         except EOFError:
             return
         except BadSubstitutionError as e:
@@ -121,6 +111,8 @@ def run(shell):
             print("intek-sh: Unexpected token after %s" % e.argument)
         except CommandNotFoundError as e:
             print("intek-sh: %s: command not found" % e.argument)
+        except EventNotFoundError as e:
+            print("intek-sh: %s: event not found" % e.argument)
 
 
 def main():

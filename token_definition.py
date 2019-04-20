@@ -1,8 +1,4 @@
 #!/usr/bin/env python3
-class Token_Pattern:
-    operators = ['\|\|', '\|', '>', '<', '<<', '>>', '&&', ";"]
-
-
 class Token:
     def __init__(self, content, original_string):
         self.content = content
@@ -66,7 +62,7 @@ class Command:
         self.token_list = token_list
         self.stdin = stdin
         self.stdout = stdout
-        self.argument_string = ""
+        self.argument_string = []
 
     def is_empty(self):
         return False if len(self.token_list) else True

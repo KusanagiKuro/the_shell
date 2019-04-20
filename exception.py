@@ -16,3 +16,8 @@ class UnexpectedTokenError(Error):
 class CommandNotFoundError(Error):
     def __init__(self, argument):
         self.argument = argument
+
+
+class EventNotFoundError(Error):
+    def __init__(self, argument):
+        self.argument = argument

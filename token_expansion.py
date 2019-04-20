@@ -1,21 +1,30 @@
 #!/usr/bin/env python3
-from token_definition import *
-from exception import *
+from token_definition import Double_Quote_Token, Single_Quote_Token,\
+                             Param_Expand_Token, Param_Value_Token,\
+                             Variable_Token, Operator_Token, Word_Token,\
+                             Subshell_Token, Separator_Token, Token
+from exception import UnexpectedTokenError, BadSubstitutionError
 from param_expansion import expand_parameter
 from globbing import globbing
 from shell import Shell
 
 
-def find_next_element_of_type_in_list(search_list, search_type):
+def find_next_element_of_type_in_list(search_list, matching_type):
+    """
+    Find the next element that has the matching type from a list
+
+    Input:
+        - search_list: a list who needs to be in 
+    """
     for item in search_list:
-        if isinstance(item, search_type):
+        if isinstance(item, matching_type):
             return item
     return None
 
 
-def expand_word_token(token, shell, glob):
-    if glob:
-        return " ".join([str(item) for item in globbing(token.content)])
+def expand_word_token(token, shell, apply_globbing):
+    if apply_globbing:
+        return [str(item) for item in globbing(token.content)]
     else:
         return token.content
 
@@ -26,11 +35,11 @@ def expand_double_quote(token, shell):
     quote
 
     Input:
-        - token: a Double_Quote_Token object
-        - shell: a Shell object
+        - token: a Double_Quote_Token object that needs to be expanded
+        - shell: a Shell object whose local variables are used in the expansion
 
     Output:
-        - content_string: final string
+        - content_string: final string after expansion
     """
     # Validate input
     if not isinstance(token, Double_Quote_Token):
@@ -41,7 +50,7 @@ def expand_double_quote(token, shell):
         return ""
     # If there is nothing inside the double quote, return an empty string
     if None in token.content:
-        return content_string
+        return ""
     # Initialize the variable that will hold the return string
     return_string = ""
     # Loop through the token list of the double quote token
@@ -72,8 +81,8 @@ def expand_variable(token, shell):
     as a string
 
     Input:
-        - token: a Variable_Token object
-        - shell: a Shell object
+        - token: a Variable_Token object that needs to be expanded
+        - shell: a Shell object whose local variables are used in the expansion
 
     Output:
         - The string of the value of the Variable_Token retreived from
@@ -89,13 +98,13 @@ def expand_variable(token, shell):
     return str(shell.local_variable.get(token.content, ""))
 
 
-def expand_parameter_token(token, shell, glob=True):
+def expand_parameter_token(token, shell, apply_globbing=True):
     """
     Return the final string after processing the parameter expansion
 
     Input:
-        - token: a Param_Expand object
-        - shell: a Shell object
+        - token: a Param_Expand_Token object that needs to be expanded
+        - shell: a Shell object whose local variables are used in the expansion
 
     Output:
         - The string after processing the parameter expansion
@@ -122,7 +131,7 @@ def expand_parameter_token(token, shell, glob=True):
     value_token = find_next_element_of_type_in_list(token.content,
                                                     Param_Value_Token)
     # Expand the value token if needed
-    value_string = expand_parameter_value_token(value_token, shell, glob)
+    value_string = expand_parameter_value_token(value_token, shell, apply_globbing)
     # Return the string after expansion
     string = expand_parameter(variable_token.content,
                               operator_string,
@@ -131,14 +140,14 @@ def expand_parameter_token(token, shell, glob=True):
     return string
 
 
-def expand_parameter_value_token(token, shell, glob):
+def expand_parameter_value_token(token, shell, apply_globbing):
     """
     Return the string after expanding the parameter value token
 
     Input:
-        - token: a Param_Value_Token object
-        - shell: a Shell object
-        - glob: a boolean value that determines whether globbing will be
+        - token: a Param_Value_Token object that needs to be expanded
+        - shell: a Shell object whose local variables are used in the expansion
+        - apply_globbing: a boolean value that determines whether globbing will be
         applied on the token inside
     """
     # Validate input
@@ -156,18 +165,22 @@ def expand_parameter_value_token(token, shell, glob):
     # Loop through the token in its token list
     for child_token in token.content:
         # Add the result of expanding the child token to the return string
-        return_string += expand_token(child_token, shell, glob)
+        expand_child_object = expand_token(child_token, shell, apply_globbing)
+        if isinstance(expand_child_object, str):
+            return_string += expand_child_object
+        elif isinstance(expand_child_object, list):
+            return_string += " ".join([str(item) for item in expand_child_object])
     return return_string
 
 
-def expand_token(token, shell, glob=True):
+def expand_token(token, shell, apply_globbing=True):
     """
     Get the string after apply expansion and globbing on all the tokens.
 
     Input:
-        - token: a Token object
-        - shell: a Shell object
-        - glob: a boolean value that determines whether globbing will be
+        - token: a Token object that needs to be expanded
+        - shell: a Shell object whose local variables are used in the expansion
+        - apply_globbing: a boolean value that determines whether globbing will be
         applied on the token inside
 
     Output:
@@ -184,13 +197,13 @@ def expand_token(token, shell, glob=True):
     if isinstance(token, (Operator_Token, Separator_Token, Subshell_Token)):
         return token.content
     elif isinstance(token, Word_Token):
-        return expand_word_token(token, shell, glob)
+        return expand_word_token(token, shell, apply_globbing)
     elif isinstance(token, Param_Expand_Token):
-        return expand_parameter_token(token, shell, glob)
+        return expand_parameter_token(token, shell, apply_globbing)
     elif isinstance(token, Variable_Token):
         return expand_variable(token, shell)
     elif isinstance(token, Double_Quote_Token):
-        return expand_double_quote(token, shell, False)
+        return expand_double_quote(token, shell)
     elif isinstance(token, Single_Quote_Token):
         return token.content.strip("'")
 
@@ -200,21 +213,29 @@ def expand_token_list(token_list, shell):
     Get the string after expanding a token list
 
     Input:
-        - token_list: a list object
-        - shell: a Shell object
+        - token_list: a token list that needs to be expanded
+        - shell: a Shell object whose local variables are used in the expansion
     """
-    return "".join([expand_token(token, shell)
-                    for token in token_list])
+    expanded_list = []
+    for token in token_list:
+        expanded_object = expand_token(token, shell)
+        if isinstance(expanded_object, str):
+            expanded_list.append(expanded_object)
+        elif isinstance(expanded_object, list):
+            expanded_list.extend(expanded_object)
+    return expanded_list
 
 
 def expand_token_for_command_list(command_list, shell):
     """
-    Get the argument string for the command list after processing
+    Get the argument list for the command list after processing
     shell expansion
 
     Input:
-        - command_list: a list object
-        - shell: a Shell object
+        - token: a command list whose commands needs to be expanded
+        - shell: a Shell object whose local variables are used in the expansion
     """
     for command in command_list:
-        command.argument_string = expand_token_list(command.token_list, shell)
+        command.argument_list = expand_token_list(command.token_list, shell)
+        command.stdout = expand_token_list(command.stdout, shell)
+        command.stdin = expand_token_list(command.stdin, shell)

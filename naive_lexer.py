@@ -1,5 +1,13 @@
 #!/usr/bin/env python3
-from token_definition import *
+from token_definition import Double_Quote_Token, Single_Quote_Token,\
+                             Param_Expand_Token, Param_Value_Token,\
+                             Variable_Token, Operator_Token, Word_Token,\
+                             Subshell_Token, Separator_Token
+from readline import get_current_history_length, get_history_item
+from utility import get_history_log
+from exception import EventNotFoundError
+from shell import Shell
+
 
 #################################
 #            Utility            #
@@ -72,6 +80,259 @@ def get_string_from_list(list_of_char, begin, end):
 
 
 #################################
+#        History Expansion      #
+#################################
+
+
+def search_history_log_with_string(history_log, search_string):
+    """
+    Search through the history log and return the command that
+    started with certain string
+
+    Input:
+        - history_log: the history log of the shell
+        - search_string: the string that we are looking for at the start
+        of the command
+
+    Output:
+        - command: the command matched the condition. None if nothing is found.
+    """
+    for command in history_log[::-1]:
+        if command.startswith(search_string):
+            return command
+    return None
+
+
+def get_search_string_for_history_event(list_of_char, index):
+    """
+    Get the search string that is defined after the exclamation mark
+
+    Input:
+        - list_of_char: list of characters from the user's input
+        - index: the index at which the history event starts
+    
+    Output:
+        - search_string: the search string that will be used to search for
+        certain command
+        - index: the index at which the search string ends
+    """
+    # Initialize a variable that holds the search string
+    search_string = list_of_char[index]
+    # Increase index by one
+    index += 1
+    # Loop till the end of the string
+    while index < len(list_of_char):
+        # Get current character
+        current_char = list_of_char[index]
+        # Break if current character is a space, tab or newline
+        if current_char in [" ", "\n", "\t"]:
+            break
+        # Else add it to the search string and move to next character
+        else:
+            search_string += current_char
+            index += 1
+    # Return search string and the index at which the searc string ends
+    return search_string, index
+
+
+def expand_history_event_starts_with_an_alphabet(list_of_char,
+                                                 index,
+                                                 history_log):
+    """
+    Replace the history event with the latest command that
+    starts with a string defined after the exclamation mark
+
+    Input:
+        - list_of_char: a list of characters from the user's input
+        - index: the index at which the history event starts
+        - history_log: the history log of the shell
+    """
+    # Save the index as the begin index
+    begin_index = index
+    # Get the search string and the index at which the search string ends
+    search_string, index = get_search_string_for_history_event(
+        list_of_char, index
+    )
+    # Strip off the exclamation mark from the search string
+    search_string = search_string.lstrip("!")
+    # Get the command that starts with the search string from the history log
+    command = search_history_log_with_string(history_log, search_string)
+    # If a command is found, start replace the history event with the command
+    if command:
+        replace_history_event_in_list_of_char(list_of_char,
+                                              command,
+                                              begin_index,
+                                              index)
+        return
+    # Raise error otherwise
+    raise EventNotFoundError("!" + search_string)
+
+
+def get_search_number_for_history_event(list_of_char, index):
+    """
+    Get the search string that is defined after the exclamation mark
+
+    Input:
+        - list_of_char: list of characters from the user's input
+        - index: the index at which the history event starts
+    
+    Output:
+        - search_string: the search string that will be used to search for
+        certain command
+        - index: the index at which the search string ends
+    """
+    # Initialize a variable that holds the search string
+    search_number = list_of_char[index]
+    # Increase index by one
+    index += 1
+    # Add the negative sign if needed
+    if list_of_char[index] == "-":
+        search_number += list_of_char[index]
+        index += 1
+    # Loop till the end of the string
+    while index < len(list_of_char):
+        # Get current character
+        current_char = list_of_char[index]
+        # If current character isn't a number, break
+        if not current_char.isnumeric():
+            break
+        # Else add it to the search string and move to next character
+        else:
+            search_number += current_char
+            index += 1
+    # Return search string and the index at which the searc string ends
+    return search_number, index
+
+
+def validate_search_number(search_number, history_log):
+    try:
+        search_number = int(search_number.strip("!"))
+        if search_number < 0:
+            search_number = abs(search_number)
+        if search_number > len(history_log) or\
+           search_number < len(history_log) - 1000:
+            raise EventNotFoundError("!" + str(search_number))
+    except ValueError:
+        raise EventNotFoundError("!-" + search_number)
+    return search_number
+
+
+def expand_history_event_at_certain_line(list_of_char,
+                                         index,
+                                         history_log,
+                                         reverse=False):
+    """
+    Replace the history event with the latest command that
+    starts with a string defined after the exclamation mark
+
+    Input:
+        - list_of_char: a list of characters from the user's input
+        - index: the index at which the history event starts
+        - history_log: the history log of the shell
+        - reverse: a boolean which determines whether the list will be
+        searched from latest to earliest or vice versa
+    """
+    # Save the index as the begin index
+    begin_index = index
+    # Get search number
+    search_number, index = get_search_number_for_history_event(
+        list_of_char, index
+    )
+    # Validate the search number
+    search_number = validate_search_number(search_number, history_log)
+    # Replace the history event with the command
+    replace_history_event_in_list_of_char(list_of_char,
+                                          history_log[search_number - 1]
+                                          if not reverse else
+                                          history_log[-search_number],
+                                          begin_index,
+                                          index)
+
+
+def replace_history_event_in_list_of_char(list_of_char,
+                                          extra_string,
+                                          begin,
+                                          end):
+    """
+    Replace the history event in list of character with the extra string
+
+    Input:
+        - list_of_char: the list of characters from user's input
+        - extra_string: the string that will replace the history event
+        - begin: the beginning index of the history event
+        - end: the ending index of the history event
+    """
+    # Readjust the ending index
+    if end == len(list_of_char):
+        end -= 1
+    # Pop all characters between begin index and end index in the
+    # list
+    for index in range(begin, end + 1):
+        list_of_char.pop(begin)
+    # Insert the characters from extra string into the list
+    extra_character_list = [char for char in extra_string]
+    while extra_character_list:
+        list_of_char.insert(begin, extra_character_list.pop())
+
+
+def expand_history_event(list_of_char, index, token_string):
+    """
+    Replace a history event with the command in the history file of the
+    shell
+
+    Input:
+        - list_of_char: a list of character fomr the user's input
+        - index: the index at which the history expansion start
+        - token_string: the current token string
+        - shell: the current shell instance
+    """
+    try:
+        # Keep the beginning index
+        begin_index = index
+        # Get history log of the shell
+        history_log = get_history_log()
+        # Check the next character and process accordingly
+        next_char = list_of_char[index + 1]
+        # Search for latest command that starts with certain string
+        # if next character is an alphabet
+        if next_char.isalpha():
+            expand_history_event_starts_with_an_alphabet(
+                list_of_char,
+                index,
+                history_log
+            )
+        # Search for command at certain line in the history log if next
+        # character is a number or a minus sign
+        elif next_char is "-":
+            expand_history_event_at_certain_line(
+                list_of_char,
+                index,
+                history_log,
+                True
+            )
+        elif next_char.isnumeric():
+            expand_history_event_at_certain_line(
+                list_of_char,
+                index,
+                history_log
+            )
+        # Get last command if next character is "!"
+        elif next_char is "!":
+            replace_history_event_in_list_of_char(list_of_char,
+                                              history_log[-1] if history_log
+                                              else "exit",
+                                              index,
+                                              index + 1)
+        else:
+            token_string += "!"
+            return index + 1, token_string
+        return begin_index, token_string
+    except IndexError:
+        token_string += "!"
+        return index + 1, token_string
+
+
+#################################
 #       Escaped Character       #
 #################################
 
@@ -103,6 +364,7 @@ def get_double_quote_token(list_of_char, index, token_list):
         - list_of_char: The list of characters from user's input
         - index: The index that marked the start of the quoted string
         - token_list: The list that the token will be added into
+        - shell: the current shell instance
 
     Output:
         - index: The end index of the quoted string
@@ -130,7 +392,14 @@ def get_double_quote_token(list_of_char, index, token_list):
                     index,
                     token_string
                 )
-            # If current chracter is an unquoted/unescaped double quote,
+            # Else if the current character is an exclamation mark, start
+            # history expansion
+            elif current_char is "!":
+                index, token_string = expand_history_event(
+                    list_of_char, index, token_string
+                )
+                continue
+            # If current character is an unquoted/unescaped double quote,
             # add a double quote token to the token list, return the current
             # index
             elif current_char is "\"":
@@ -231,14 +500,34 @@ def get_single_quote_token(list_of_char, index, token_list):
 
 
 def get_param_expansion(list_of_char, index, token_list):
+    """
+    Get the parameter expansion token
+
+    Input:
+        - list_of_char: a list of characters from the user's input
+        - index: the index at which the dollar sign that marks the
+        parameter expansion
+        - token_list: the list contains the tokens that will be returned
+        after the lexing
+    
+    Output:
+        - index: the ending index of the parameter expansion
+    """
+    # Keep the starting index
     begin_index = index
-    token_string = ""
+    # Initalize the list that will contains the variable name, operator and
+    # substitute value
     content_list = []
+    # Initialize the variables that will keep the current value of the variable
+    # name, operator and substitute value
     param_name = ""
     param_operator = ""
     param_value = []
+    # Increase the index to the start of the parameter expansion starts
     index += 2
+    # Loop till the user input is correct
     while True:
+        # If the operator and substitute value are empty, get the variable name
         if not param_operator and not param_value:
             index, param_name = get_param_name(
                 list_of_char,
@@ -246,6 +535,7 @@ def get_param_expansion(list_of_char, index, token_list):
                 content_list,
                 param_name
             )
+        # If the substitute value is empty, get the operator
         if not param_value:
             index, param_operator = get_param_operator(
                 list_of_char,
@@ -253,14 +543,19 @@ def get_param_expansion(list_of_char, index, token_list):
                 content_list,
                 param_operator
             )
+        # Always check and get the parameter value
         index, param_value = get_param_value(
             list_of_char,
             index,
             content_list,
             param_value
         )
+        # Check if the parameter expansion has been closed, if not, ask the user
+        # for more input
         try:
             current_char = list_of_char[index]
+            # If the parameter expansion has been closed, add it to the
+            # token list and return the ending index
             if current_char is "}":
                 insert_token_to_list(
                     content_list if content_list else [None],
@@ -287,29 +582,30 @@ def get_param_name(list_of_char, index, token_list, current_value):
         - list_of_char: The list of characters from user's input
         - index: The index that marked the start of the parameter name
         - token_list: The list that the token will be added into
+        - current_value: the current value of the parameter name
 
     Output:
         - index: The end index of the parameter name
     """
+    # Keep current index
     begin_index = index
+    # Set token string to the current value
     token_string = current_value
-    content_list = []
+    # If the token string is empty and the current character isn't
+    # an alphabet or underscore, return
+    if not token_string and not (list_of_char[index].isalpha() or
+                                 list_of_char[index] == "_"):
+        return index, token_string
+    # Loop till the end of list
     while index < len(list_of_char):
+        # Get current character
         current_char = list_of_char[index]
+        # If current character is a number or a character or an underscore,
+        # add it to the variable name
         if current_char.isalnum() or current_char is "_":
             token_string += current_char
-        elif current_char is "}":
-            insert_token_to_list(
-                token_string,
-                token_list,
-                token_type="Variable",
-                original_string=get_string_from_list(
-                    list_of_char,
-                    begin_index,
-                    index
-                )
-            )
-            return index, token_string
+        # Else add the variable name to the token list
+        # return the index if current character is the closing brace, otherwise index + 1
         else:
             insert_token_to_list(
                 token_string,
@@ -321,18 +617,36 @@ def get_param_name(list_of_char, index, token_list, current_value):
                     index
                 )
             )
-            break
+            return index + 1 if current_char != "}" else index, token_string
         index += 1
     return index, token_string
 
 
 def get_param_operator(list_of_char, index, token_list, current_value):
+    """
+    Get the parameter operator in the parameter expansion
+
+    Input:
+        - list_of_char: The list of characters from user's input
+        - index: The index that marked the start of the parameter operator
+        - token_list: The list that the token will be added into
+        - current_value: the current value of the parameter operator
+
+    Output:
+        - index: The end index of the parameter operator
+    """
+    # Create a list of valid operators
     operators = ["##", "%%", "%", "#", ":", ":?", ":-",
                  ":=", ":+"]
-    previous_char = ""
+    # Set token string to the current value
     token_string = current_value
+    # Loop till the end of list
     while index < len(list_of_char):
+        # Get current character
         current_char = list_of_char[index]
+        # If the current character cannot form an operator with previous
+        # characters in token string, add the token to the token list as
+        # an operator token. Return the index, token string
         if token_string + current_char not in operators:
             insert_token_to_list(
                 token_string,
@@ -340,32 +654,55 @@ def get_param_operator(list_of_char, index, token_list, current_value):
                 token_type="Operator"
             )
             return index, token_string
-        elif current_char is "}":
-            insert_token_to_list(
-                token_string,
-                token_list,
-                token_type="Operator"
-            )
-            return index, token_string
+        # Else add it to the token string
         else:
             token_string += current_char
         index += 1
     return index, token_string
 
 
-def get_param_value(list_of_char, index, token_list, current_content_list):
+def get_param_value(list_of_char,
+                    index,
+                    token_list,
+                    current_content_list):
+    """
+    Get the parameter operator in the parameter expansion
+
+    Input:
+        - list_of_char: The list of characters from user's input
+        - index: The index that marked the start of the substitute value
+        - token_list: The list that the token will be added into
+        - current_content_list: the current value of the substitute value
+
+    Output:
+        - index: The end index of the substitute value
+    """
+    # Initialize the token string
     token_string = ""
+    # Initialize the content list
     content_list = current_content_list
+    # Loop till the end of list
     while index < len(list_of_char):
         current_char = list_of_char[index]
+        # Pass through all the new space if the content list is empty
         if current_char is " " and not content_list:
             pass
+        # Process backslash
         elif current_char is "\\":
             list_of_char, index, token_string = get_escaped_character(
                 list_of_char,
                 index,
                 token_string
             )
+        # Else if the current character is an exclamation mark
+        elif current_char is "!":
+            index, token_string = expand_history_event(
+                list_of_char, index, token_string
+            )
+            continue
+        # Else if the current character is the closing brace,
+        # add the content list to the token list as a param_value token
+        # Return the index and current content list
         elif current_char is "}":
             insert_token_to_list(
                 token_string,
@@ -378,6 +715,9 @@ def get_param_value(list_of_char, index, token_list, current_content_list):
                 token_type="Param_Value"
             )
             return index, content_list
+        # Else if the current character is ":",
+        # add the previous token string to the content list as word token
+        # and add the extra operator token into the param_value
         elif current_char is ":":
             insert_token_to_list(
                 token_string,
@@ -390,7 +730,9 @@ def get_param_value(list_of_char, index, token_list, current_content_list):
                 token_type="Operator"
             )
             token_string = ""
-        elif current_char is " " or current_char is "\n":
+        # Add previous token string to token list if current character is
+        # a space or new line
+        elif current_char in [" ", "\n", "\t"]:
             insert_token_to_list(
                 token_string,
                 content_list,
@@ -402,7 +744,8 @@ def get_param_value(list_of_char, index, token_list, current_content_list):
                 token_type="Separator"
             )
             token_string = ""
-        elif current_char is "'" or current_char is "\"":
+        # Else if the current character is a quote, process according to its type
+        elif current_char in ["'", "\""]:
             insert_token_to_list(
                 token_string,
                 content_list,
@@ -421,6 +764,7 @@ def get_param_value(list_of_char, index, token_list, current_content_list):
                     content_list
                 )
             )
+        # Else if current character is a dollar sign, process dollar sign expansion
         elif current_char is "$":
             index, token_string = process_dollar_sign(
                 list_of_char,
@@ -428,9 +772,11 @@ def get_param_value(list_of_char, index, token_list, current_content_list):
                 token_string,
                 content_list
             )
+        # Else just add it to the token string
         else:
             token_string += current_char
         index += 1
+    # If end of list is reached, add the remaining token string to the token list
     insert_token_to_list(
         token_string,
         content_list,
@@ -440,13 +786,27 @@ def get_param_value(list_of_char, index, token_list, current_content_list):
 
 
 def get_variable(list_of_char, index, token_list):
-    previous_char = list_of_char[index]
+    """
+    Get the variable token
+
+    Input:
+        - list_of_char: a list of characters from the user's input
+        - index: the index at which the dollar sign that marks the
+        variable token is
+        - token_list: the list contains the tokens that will be returned
+        after the lexing
+    
+    Output:
+        - index: the ending index of the parameter expansion
+    """
+    # Initialize the string that will keep the variable name
     token_string = ""
+    # Loop till the end of list
     while index < len(list_of_char):
         try:
-            current_char = list_of_char[index + 1]
-            if current_char.isalnum() or current_char is "_":
-                token_string += current_char
+            next_char = list_of_char[index + 1]
+            if next_char.isalnum() or next_char is "_":
+                token_string += next_char
             else:
                 insert_token_to_list(
                     token_string,
@@ -454,6 +814,7 @@ def get_variable(list_of_char, index, token_list):
                     token_type="Variable"
                 )
                 return index
+        # Add the token string into the token list when end of string is reached
         except IndexError:
             if token_string:
                 insert_token_to_list(
@@ -469,6 +830,15 @@ def get_variable(list_of_char, index, token_list):
 def get_dollar_sign_expand(list_of_char, index, token_list):
     """
     Get the token marked by the dollar sign
+
+    Input:
+        - list_of_char: a list of characters from the user's input
+        - index: the index in the above list at which the dollar sign is
+        - token_list: the list of token that will be returned at the end
+        of the lexing process
+
+    Output:
+        - index: the index at which the expansion ends
     """
     try:
         next_character = list_of_char[index + 1]
@@ -496,13 +866,24 @@ def get_dollar_sign_expand(list_of_char, index, token_list):
         return index
 
 
-def process_dollar_sign(list_of_char, index, token_string, token_list):
+def process_dollar_sign(list_of_char,
+                        index,
+                        token_string,
+                        token_list):
     """
     See if the dollar sign's a normal character, a
     variable or an expansion and process accordingly.
 
     Input:
-        - list_of_char
+        - list_of_char: a list of characters from the user's input
+        - index: the index in the above list at which the dollar sign is
+        - token_string: the current token string
+        - token_list: the list of token that will be returned at the end
+        of the lexing process
+    
+    Output:
+        - index: the index at which the expansion ends
+        - token_string: the token string after modification
     """
     end_index = get_dollar_sign_expand(
         list_of_char,
@@ -582,6 +963,7 @@ def get_token_list(input_string):
 
     Input:
         - input_string: The string that the user has input
+        - shell: the current shell instance
 
     Output:
         - token_list: the list of tokens after conversion
@@ -626,6 +1008,10 @@ def get_token_list(input_string):
             insert_token_to_list(token_string, token_list,
                                  token_type="Operator")
             token_string = ""
+            continue
+        # Else if the current character is an exclamation mark
+        elif current_char is "!":
+            index, token_string = expand_history_event(list_of_char, index, token_string)
             continue
         # Else if current character is a <backslash>
         elif current_char is "\\":
@@ -695,4 +1081,4 @@ def get_token_list(input_string):
             token_string,
             token_list
         )
-    return token_list
+    return token_list, list_of_char
